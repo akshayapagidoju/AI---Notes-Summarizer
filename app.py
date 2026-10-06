@@ -1,145 +1,145 @@
 
 import streamlit as st
-import ollama
+from google import genai
 
 # -----------------------------
-# Page Configuration
+# Page configuration
 # -----------------------------
 st.set_page_config(
     page_title="AI Notes Summarizer",
-    page_icon="📝",
-    layout="wide"
+    page_icon="📚",
+    layout="centered"
 )
+
+# -----------------------------
+# Get Gemini API key
+# -----------------------------
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+except Exception:
+    st.error("Gemini API key is not configured.")
+    st.info("Add GEMINI_API_KEY in Streamlit Cloud → Settings → Secrets.")
+    st.stop()
+
+# -----------------------------
+# Gemini client
+# -----------------------------
+client = genai.Client(api_key=api_key)
 
 # -----------------------------
 # Title
 # -----------------------------
-st.title("📝 AI Notes Summarizer")
-st.write(
-    "Paste your notes below and let AI create a clear, "
-    "simple and exam-friendly summary."
-)
+st.title("📚 AI Notes Summarizer")
+st.write("Upload your notes or paste text and get a clear, concise summary using AI.")
+
+st.divider()
 
 # -----------------------------
-# Notes Input
+# Text input
 # -----------------------------
 notes = st.text_area(
-    "📚 Paste Your Notes",
-    height=350,
-    placeholder="Paste your lecture notes here..."
+    "📝 Paste your notes here",
+    height=300,
+    placeholder="Paste your class notes, study material, or any text here..."
 )
 
 # -----------------------------
-# Summary Length
+# File upload
 # -----------------------------
-summary_length = st.selectbox(
-    "📌 Choose Summary Length",
-    ["Short", "Medium", "Detailed"]
+uploaded_file = st.file_uploader(
+    "📄 Or upload a text file",
+    type=["txt"]
+)
+
+if uploaded_file is not None:
+    file_text = uploaded_file.read().decode("utf-8")
+    notes = file_text
+    st.success("File uploaded successfully!")
+
+# -----------------------------
+# Summary options
+# -----------------------------
+summary_type = st.selectbox(
+    "Choose summary type",
+    [
+        "Short Summary",
+        "Detailed Summary",
+        "Exam Notes",
+        "Key Points"
+    ]
 )
 
 # -----------------------------
-# Summarize Button
+# Summarize button
 # -----------------------------
 if st.button("✨ Summarize Notes", use_container_width=True):
 
     if not notes.strip():
-        st.warning("⚠️ Please paste some notes first.")
+        st.warning("Please paste some notes or upload a text file.")
+        st.stop()
+
+    if summary_type == "Short Summary":
+        instruction = """
+        Summarize the notes briefly.
+        Include only the most important information.
+        """
+
+    elif summary_type == "Detailed Summary":
+        instruction = """
+        Create a detailed but easy-to-understand summary.
+        Cover all important concepts from the notes.
+        """
+
+    elif summary_type == "Exam Notes":
+        instruction = """
+        Convert the notes into exam preparation notes.
+        Use headings, definitions, important points, and examples where useful.
+        Keep the language simple and easy to remember.
+        """
 
     else:
+        instruction = """
+        Extract the most important key points from the notes.
+        Present them as clear bullet points.
+        """
 
-        # Different instructions for different summary lengths
-        if summary_length == "Short":
-            instruction = """
-Create a short summary.
-Include only the most important points.
-Use simple bullet points.
-"""
-
-        elif summary_length == "Medium":
-            instruction = """
-Create a medium-length summary.
-Include important concepts, definitions and key points.
-Use headings and bullet points.
-"""
-
-        else:
-            instruction = """
-Create a detailed summary.
-Include important concepts, definitions, explanations,
-examples and key points.
-Organize the answer using clear headings and bullet points.
-"""
-
-        # -----------------------------
-        # Prompt
-        # -----------------------------
-        prompt = f"""
-You are an AI Notes Summarizer designed for college students.
-
-Your job is to summarize the notes given below.
+    prompt = f"""
+You are an AI Notes Summarizer.
 
 {instruction}
 
-Important rules:
-- Do not change the meaning of the notes.
-- Do not add unrelated information.
+Rules:
+- Do not change the meaning of the original notes.
 - Use simple English.
-- Make the summary easy to study.
-- Highlight important terms.
-- Make it useful for exam preparation.
+- Organize the answer clearly.
+- Use headings and bullet points where appropriate.
 
-Here are the notes:
+Notes:
 
 {notes}
 """
 
+    with st.spinner("🤖 AI is summarizing your notes..."):
+
         try:
-            # -----------------------------
-            # Send request to Ollama
-            # -----------------------------
-            with st.spinner("🤖 AI is summarizing your notes..."):
-
-                response = ollama.chat(
-                    model="llama3.2",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ]
-                )
-
-            # -----------------------------
-            # Display Summary
-            # -----------------------------
-            summary = response["message"]["content"]
-
-            st.success("✅ Summary generated successfully!")
-
-            st.subheader("📌 AI Summary")
-
-            st.markdown(summary)
-
-            # -----------------------------
-            # Download Summary
-            # -----------------------------
-            st.download_button(
-                label="📥 Download Summary",
-                data=summary,
-                file_name="AI_Notes_Summary.txt",
-                mime="text/plain"
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
             )
+
+            st.success("Summary generated successfully!")
+
+            st.subheader("📖 Summary")
+            st.write(response.text)
 
         except Exception as e:
+            st.error("Unable to generate the summary.")
+            st.write("Please check your Gemini API key and try again.")
 
-            st.error(
-                "❌ Could not connect to Ollama."
-            )
+# -----------------------------
+# Footer
+# -----------------------------
+st.divider()
+st.caption("AI Notes Summarizer | Built with Streamlit and Gemini AI")
 
-            st.info(
-                "Make sure Ollama is installed and running, "
-                "and that the llama3.2 model is available."
-            )
-
-            st.code(str(e))
 
